@@ -10,7 +10,7 @@ end
 print(names[#names])
 for k, v in pairs(caps) do
 	if type(v) == "string" then
-		v = string.format("%q", v)
+		v = string.format("%q", v):gsub("\n", "\\n")
 	else
 		v = tostring(v)
 	end
