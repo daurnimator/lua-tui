@@ -1,6 +1,11 @@
 local function make_filter(func)
-	return function(rawgetnext)
-		local emit = coroutine.yield
+	return function(rawgetnext, wrap, emit)
+		if wrap == nil then
+			wrap = coroutine.wrap
+		end
+		if emit == nil then
+			emit = coroutine.yield
+		end
 		local function getnext()
 			local c, err, errno = rawgetnext()
 			if c == nil then
@@ -10,7 +15,7 @@ local function make_filter(func)
 			end
 			return c
 		end
-		return coroutine.wrap(function()
+		return wrap(function()
 			return func(getnext, emit)
 		end)
 	end
@@ -131,18 +136,18 @@ local filter_mouse = make_filter(function(getnext, emit)
 	end
 end)
 
-local function default_chain(getnext)
+local function default_chain(getnext, ...)
 	-- Always filter ESC first
-	getnext = filter_esc(getnext)
+	getnext = filter_esc(getnext, ...)
 	-- These can be in any order
-	getnext = filter_csi(getnext)
-	getnext = filter_osc(getnext)
-	getnext = filter_dcs(getnext)
-	getnext = filter_sos(getnext)
-	getnext = filter_pm(getnext)
-	getnext = filter_apc(getnext)
+	getnext = filter_csi(getnext, ...)
+	getnext = filter_osc(getnext, ...)
+	getnext = filter_dcs(getnext, ...)
+	getnext = filter_sos(getnext, ...)
+	getnext = filter_pm(getnext, ...)
+	getnext = filter_apc(getnext, ...)
 	-- Always after CSI
-	getnext = filter_mouse(getnext)
+	getnext = filter_mouse(getnext, ...)
 	return getnext
 end
 
