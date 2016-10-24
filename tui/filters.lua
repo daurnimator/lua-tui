@@ -136,9 +136,50 @@ local filter_mouse = make_filter(function(getnext, emit)
 	end
 end)
 
+-- Filter that fixes linux virtual console bugs
+local filter_linux = make_filter(function(getnext, emit)
+	while true do
+		local c = getnext()
+		if c == "\27[" then -- bug in F1-F5 keys
+			c = getnext()
+			if c == "[" then
+				c = getnext()
+				if c == "A" or c == "B" or c == "C" or c == "D" or c == "E" then
+					emit("\27[[" .. c)
+				else
+					emit("\27[")
+					emit("[")
+					emit(c)
+				end
+			else
+				emit("\27[")
+				emit(c)
+			end
+		elseif c == "\27]" then -- bug is an unterminated OSC: P n rr gg bb
+			c = getnext()
+			if c == "P" then
+				local r1 = getnext()
+				local r2 = getnext()
+				local g1 = getnext()
+				local g2 = getnext()
+				local b1 = getnext()
+				local b2 = getnext()
+				emit("\27]P" .. r1 .. r2 .. g1 .. g2 .. b1 .. b2)
+			else
+				emit("\27]")
+				emit(c)
+			end
+		else
+			emit(c)
+		end
+	end
+end)
+
 local function default_chain(getnext, ...)
 	-- Always filter ESC first
 	getnext = filter_esc(getnext, ...)
+	-- Should be after ESC but before CSI and OSC
+	getnext = filter_linux(getnext, ...)
 	-- These can be in any order
 	getnext = filter_csi(getnext, ...)
 	getnext = filter_osc(getnext, ...)
@@ -155,6 +196,7 @@ return {
 	make_filter = make_filter;
 
 	ESC = filter_esc;
+	linux = filter_linux;
 	CSI = filter_csi;
 	OSC = filter_osc;
 	DCS = filter_dcs;
