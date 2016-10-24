@@ -40,6 +40,30 @@ local filter_esc = make_filter(function(getnext, emit)
 	end
 end)
 
+local filter_ss2 = make_filter(function(getnext, emit)
+	while true do
+		local c = getnext()
+		if c == "\27N" then
+			c = getnext()
+			emit("\27N" .. c)
+		else
+			emit(c)
+		end
+	end
+end)
+
+local filter_ss3 = make_filter(function(getnext, emit)
+	while true do
+		local c = getnext()
+		if c == "\27O" then
+			c = getnext()
+			emit("\27O" .. c)
+		else
+			emit(c)
+		end
+	end
+end)
+
 local filter_csi = make_filter(function(getnext, emit)
 	while true do
 		local c = getnext()
@@ -181,6 +205,8 @@ local function default_chain(getnext, ...)
 	-- Should be after ESC but before CSI and OSC
 	getnext = filter_linux(getnext, ...)
 	-- These can be in any order
+	getnext = filter_ss2(getnext, ...)
+	getnext = filter_ss3(getnext, ...)
 	getnext = filter_csi(getnext, ...)
 	getnext = filter_osc(getnext, ...)
 	getnext = filter_dcs(getnext, ...)
@@ -197,6 +223,8 @@ return {
 
 	ESC = filter_esc;
 	linux = filter_linux;
+	SS2 = filter_ss2;
+	SS3 = filter_ss3;
 	CSI = filter_csi;
 	OSC = filter_osc;
 	DCS = filter_dcs;
