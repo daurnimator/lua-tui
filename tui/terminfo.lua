@@ -633,15 +633,45 @@ local function open_terminfo(path)
 	return read_terminfo(contents)
 end
 
-local function find_terminfo(TERM, dir)
+local ENOENT = 2
+local default_system_dir = "/usr/share/terminfo/"
+
+local function find_terminfo(TERM, dirs)
 	if TERM == nil then
 		TERM = assert(os.getenv "TERM", "no $TERM set")
 	end
-	if dir == nil then
-		dir = "/usr/share/terminfo/"
+	if dirs == nil then
+		local TERMINFO = os.getenv "TERMINFO"
+		if TERMINFO then
+			dirs = { TERMINFO:gsub("/?$", "/") }
+		else
+			dirs = { }
+			local HOME = os.getenv "HOME"
+			if HOME then
+				dirs[1] = os.getenv "HOME" .. "/.terminfo"
+			end
+			local TERMINFO_DIRS = os.getenv "TERMINFO_DIRS"
+			if TERMINFO_DIRS then
+				for dir in TERMINFO_DIRS:gmatch("[^:]*") do
+					if dir == "" then
+						dir = default_system_dir
+					end
+					table.insert(dirs, dir)
+				end
+			else
+				table.insert(dirs, default_system_dir)
+			end
+		end
 	end
-	local path = string.format("%s/%s/%s", dir, TERM:sub(1, 1), TERM)
-	return open_terminfo(path)
+	local caps, names, errno
+	for _, dir in ipairs(dirs) do
+		local path = string.format("%s/%s/%s", dir, TERM:sub(1, 1), TERM)
+		caps, names, errno = open_terminfo(path)
+		if caps ~= nil or errno ~= ENOENT then
+			break
+		end
+	end
+	return caps, names, errno
 end
 
 return {
