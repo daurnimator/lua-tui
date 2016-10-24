@@ -43,9 +43,8 @@ end)
 local filter_ss2 = make_filter(function(getnext, emit)
 	while true do
 		local c = getnext()
-		if c == "\27N" then
-			c = getnext()
-			emit("\27N" .. c)
+		if c == "\27N" or c == "\142" then
+			emit(c .. getnext())
 		else
 			emit(c)
 		end
@@ -55,9 +54,8 @@ end)
 local filter_ss3 = make_filter(function(getnext, emit)
 	while true do
 		local c = getnext()
-		if c == "\27O" then
-			c = getnext()
-			emit("\27O" .. c)
+		if c == "\27O" or c == "\143" then
+			emit(c .. getnext())
 		else
 			emit(c)
 		end
@@ -67,7 +65,8 @@ end)
 local filter_csi = make_filter(function(getnext, emit)
 	while true do
 		local c = getnext()
-		if c == "\27[" then
+		if c == "\27[" or c == "\155" then
+			local csi = c
 			-- Read whole CSI sequence
 			--[[ from ECMA-048:
 			The format of a control sequence is 'CSI P ... P I ... I F' where
@@ -96,10 +95,9 @@ local filter_csi = make_filter(function(getnext, emit)
 			end
 			if c:match("[\64-\126]") then
 				final = c
-				emit("\27["..table.concat(parameters) .. table.concat(intermediate) .. final)
+				emit(csi..table.concat(parameters) .. table.concat(intermediate) .. final)
 			else -- not valid CSI code... emit the whole thing character by character
-				emit("\27")
-				emit("[")
+				emit(csi)
 				for _, v in ipairs(parameters) do
 					emit(v)
 				end
@@ -114,15 +112,15 @@ local filter_csi = make_filter(function(getnext, emit)
 	end
 end)
 
-local function make_terminated_filter(prefix, terminator_pattern)
+local function make_st_terminated_filter(prefix, alt_prefix)
 	return make_filter(function(getnext, emit)
 		while true do
 			local c = getnext()
-			if c == prefix then
+			if c == prefix or c == alt_prefix then
 				local chars = {}
 				while true do
 					c = getnext()
-					if c:match(terminator_pattern) then
+					if c == "\27\\" or c == "\156" then
 						break
 					end
 					table.insert(chars, c)
@@ -134,17 +132,16 @@ local function make_terminated_filter(prefix, terminator_pattern)
 		end
 	end)
 end
-
-local filter_osc = make_terminated_filter("\27]", "[\7\156]") -- OSC can be terminated by ST or BEL
-local filter_dcs = make_terminated_filter("\27P", "\156")
-local filter_sos = make_terminated_filter("\27X", "\156")
-local filter_pm = make_terminated_filter("\27^", "\156")
-local filter_apc = make_terminated_filter("\27_", "\156")
+local filter_osc = make_st_terminated_filter("\27]", "\157") -- TODO: OSC can be terminated by BEL in xterm
+local filter_dcs = make_st_terminated_filter("\27P", "\144")
+local filter_sos = make_st_terminated_filter("\27X", "\152")
+local filter_pm = make_st_terminated_filter("\27^", "\158")
+local filter_apc = make_st_terminated_filter("\27_", "\159")
 
 local filter_mouse = make_filter(function(getnext, emit)
 	while true do
 		local c = getnext()
-		if c == "\27[M" then
+		if c == "\27[M" or c == "\155M" then
 			-- The low two bits of C b encode button information: 0=MB1 pressed, 1=MB2 pressed, 2=MB3 pressed, 3=release.
 			-- The next three bits encode the modifiers which were down when the button was pressed and are added together: 4=Shift, 8=Meta, 16=Control.
 			-- On button-motion events, xterm adds 32 to the event code (the third character, C b )
@@ -153,7 +150,7 @@ local filter_mouse = make_filter(function(getnext, emit)
 			-- C x and C y are the x and y coordinates of the mouse event, encoded as in X10 mode.
 			local cx = getnext()
 			local cy = getnext()
-			emit("\27[M" .. cb .. cx .. cy)
+			emit(c .. cb .. cx .. cy)
 		else
 			emit(c)
 		end
