@@ -548,7 +548,7 @@ local function read_compiled_terminfo(contents)
 			local offset = sunpack("<I2", contents, pos+i*2)
 			if offset ~= 65535 then
 				assert(offset < s_string)
-				local s = string.unpack("z", contents, string_table_offset+offset)
+				local s = sunpack("z", contents, string_table_offset+offset)
 				caps[Strings[i]] = s
 			end
 		end
