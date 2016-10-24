@@ -577,7 +577,7 @@ local function read_text_terminfo(contents)
 	local names = {}
 
 	-- strip comments
-	contents = contents:gsub("%f[^\n]#\n", "")
+	contents = contents:gsub("%f[^\n%z]#\n", "")
 
 	local iter, state, last = contents:gmatch("[^,%s][^,]*")
 	do
