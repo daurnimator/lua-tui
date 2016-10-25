@@ -990,6 +990,13 @@ local caps_mt = {
 	__name = "tui.terminfo capabilities";
 }
 
+function caps_mt:__index(k)
+	k = short_to_long[k]
+	if k ~= nil then
+		return rawget(self, k)
+	end
+end
+
 local function read_compiled_terminfo(contents)
 	local magic, name_size, n_booleans, n_numbers, n_offsets, s_string, pos = sunpack("<I2 I2 I2 I2 I2 I2", contents)
 	assert(magic == 282)
