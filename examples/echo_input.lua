@@ -6,7 +6,7 @@ tui_util.atexit(function()
 	os.execute("stty sane")
 end)
 
-os.execute("stty -icanon -echo -isig")
+os.execute("stty raw opost -echo")
 assert(io.stdout:write(
 	"\27[?1002h", -- Turn on click + drag mouse movement reporting
 	"\27[?1003h" -- Turn on *all* mouse movement reporting (some terms don't support, e.g. tmux)
