@@ -1,234 +1,265 @@
-local function make_filter(func)
-	return function(rawgetnext, wrap, emit)
-		if wrap == nil then
-			wrap = coroutine.wrap
-		end
-		if emit == nil then
-			emit = coroutine.yield
-		end
-		local function getnext()
-			local c, err, errno = rawgetnext()
-			if c == nil then
-				while true do
-					emit(nil, err, errno)
-				end
-			end
-			return c
-		end
-		return wrap(function()
-			return func(getnext, emit)
-		end)
-	end
-end
-
-local filter_esc = make_filter(function(getnext, emit)
-	while true do
-		local c = getnext()
-		if c == "\27" then
+local function ESC(peek)
+	if peek(1) == "\27" then
+		if peek(2) == "\27" then
 			-- If multiple ESC in a row just emit them
-			while true do
-				c = getnext()
-				if c ~= "\27" then
-					break
-				end
-				emit(c)
-			end
-			emit("\27" .. c)
+			return 1
 		else
-			emit(c)
+			return 2
 		end
 	end
-end)
-
-local filter_ss2 = make_filter(function(getnext, emit)
-	while true do
-		local c = getnext()
-		if c == "\27N" or c == "\142" then
-			emit(c .. getnext())
-		else
-			emit(c)
-		end
-	end
-end)
-
-local filter_ss3 = make_filter(function(getnext, emit)
-	while true do
-		local c = getnext()
-		if c == "\27O" or c == "\143" then
-			emit(c .. getnext())
-		else
-			emit(c)
-		end
-	end
-end)
-
-local filter_csi = make_filter(function(getnext, emit)
-	while true do
-		local c = getnext()
-		if c == "\27[" or c == "\155" then
-			local csi = c
-			-- Read whole CSI sequence
-			--[[ from ECMA-048:
-			The format of a control sequence is 'CSI P ... P I ... I F' where
-			  - P ... P are parameter bytes, which, if present, consist of bit combinations from 03/00 to 03/15
-			  - I ... I are intermediate bytes, which, if present, consist of bit combinations from 02/00 to 02/15
-				Together with the Final Byte F they identify the control function
-			  - F is the final byte; it consists of a bit combination from 04/00 to 07/14
-			]]
-			local parameters = {}
-			local intermediate = {}
-			local final
-			c = getnext()
-			while true do
-				if c:match("[^\48-\63]") then
-					break
-				end
-				table.insert(parameters, c)
-				c = getnext()
-			end
-			while true do
-				if c:match("[^\32-\47]") then
-					break
-				end
-				table.insert(intermediate, c)
-				c = getnext()
-			end
-			if c:match("[\64-\126]") then
-				final = c
-				emit(csi..table.concat(parameters) .. table.concat(intermediate) .. final)
-			else -- not valid CSI code... emit the whole thing character by character
-				emit(csi)
-				for _, v in ipairs(parameters) do
-					emit(v)
-				end
-				for _, v in ipairs(intermediate) do
-					emit(v)
-				end
-				emit(c)
-			end
-		else
-			emit(c)
-		end
-	end
-end)
-
-local function make_st_terminated_filter(prefix, alt_prefix)
-	return make_filter(function(getnext, emit)
-		while true do
-			local c = getnext()
-			if c == prefix or c == alt_prefix then
-				local chars = {}
-				while true do
-					c = getnext()
-					if c == "\27\\" or c == "\156" then
-						break
-					end
-					table.insert(chars, c)
-				end
-				emit(prefix..table.concat(chars)..c)
-			else
-				emit(c)
-			end
-		end
-	end)
 end
-local filter_osc = make_st_terminated_filter("\27]", "\157") -- TODO: OSC can be terminated by BEL in xterm
-local filter_dcs = make_st_terminated_filter("\27P", "\144")
-local filter_sos = make_st_terminated_filter("\27X", "\152")
-local filter_pm = make_st_terminated_filter("\27^", "\158")
-local filter_apc = make_st_terminated_filter("\27_", "\159")
 
-local filter_mouse = make_filter(function(getnext, emit)
-	while true do
-		local c = getnext()
-		if c == "\27[M" or c == "\155M" then
-			-- The low two bits of C b encode button information: 0=MB1 pressed, 1=MB2 pressed, 2=MB3 pressed, 3=release.
-			-- The next three bits encode the modifiers which were down when the button was pressed and are added together: 4=Shift, 8=Meta, 16=Control.
-			-- On button-motion events, xterm adds 32 to the event code (the third character, C b )
-			-- Wheel mice may return buttons 4 and 5. Those buttons are represented by the same event codes as buttons 1 and 2 respectively, except that 64 is added to the event code.
-			local cb = getnext()
-			-- C x and C y are the x and y coordinates of the mouse event, encoded as in X10 mode.
-			local cx = getnext()
-			local cy = getnext()
-			emit(c .. cb .. cx .. cy)
-		else
-			emit(c)
+local function SS2(peek)
+	local c = peek(1)
+	if c == "\27" then
+		if peek(2) == "N" then
+			return 3
 		end
+	elseif c == "\142" then
+		return 2
 	end
-end)
+end
+
+local function SS3(peek)
+	local c = peek(1)
+	if c == "\27" then
+		if peek(2) == "O" then
+			return 3
+		end
+	elseif c == "\143" then
+		return 2
+	end
+end
+
+local function CSI(peek)
+	local c = peek(1)
+	local pos
+	if c == "\27" then
+		if peek(2) == "[" then
+			pos = 3
+		else
+			return
+		end
+	elseif c == "\155" then
+		pos = 2
+	else
+		return
+	end
+	-- Read whole CSI sequence
+	--[[ from ECMA-048:
+	The format of a control sequence is 'CSI P ... P I ... I F' where
+	  - P ... P are parameter bytes, which, if present, consist of bit combinations from 03/00 to 03/15
+	  - I ... I are intermediate bytes, which, if present, consist of bit combinations from 02/00 to 02/15
+		Together with the Final Byte F they identify the control function
+	  - F is the final byte; it consists of a bit combination from 04/00 to 07/14
+	]]
+	c = peek(pos)
+	while c and c:match("[\48-\63]") do
+		pos = pos + 1
+		c = peek(pos)
+	end
+	while c and c:match("[\32-\47]") do
+		pos = pos + 1
+		c = peek(pos)
+	end
+	if c and c:match("[\64-\126]") then
+		return pos
+	end
+	-- not valid CSI code...
+end
+
+local function OSC(peek)
+	local c = peek(1)
+	local pos
+	if c == "\27" then
+		if peek(2) == "]" then
+			pos = 3
+		else
+			return
+		end
+	elseif c == "\157" then
+		pos = 2
+	else
+		return
+	end
+	while c do
+		c = peek(pos)
+		if c == "\27" then
+			if peek(pos+1) == "\\" then
+				return pos+1
+			end
+		elseif c == "\156" or c == "\9" then -- OSC can be terminated by BEL in xterm
+			return pos
+		else
+			return
+		end
+		pos = pos + 1
+	end
+end
+
+local function peek_for_st(peek, pos)
+	repeat
+		local c = peek(pos)
+		if c == "\27" then
+			if peek(pos+1) == "\\" then
+				return pos+1
+			end
+		elseif c == "\156" then
+			return pos
+		end
+		pos = pos + 1
+	until not c
+end
+
+local function DCS(peek)
+	local c = peek(1)
+	local pos
+	if c == "\27" then
+		if peek(2) == "P" then
+			pos = 3
+		else
+			return
+		end
+	elseif c == "\144" then
+		pos = 2
+	else
+		return
+	end
+	return peek_for_st(peek, pos)
+end
+
+local function SOS(peek)
+	local c = peek(1)
+	local pos
+	if c == "\27" then
+		if peek(2) == "X" then
+			pos = 3
+		else
+			return
+		end
+	elseif c == "\152" then
+		pos = 2
+	else
+		return
+	end
+	return peek_for_st(peek, pos)
+end
+
+local function PM(peek)
+	local c = peek(1)
+	local pos
+	if c == "\27" then
+		if peek(2) == "^" then
+			pos = 3
+		else
+			return
+		end
+	elseif c == "\158" then
+		pos = 2
+	else
+		return
+	end
+	return peek_for_st(peek, pos)
+end
+
+local function APC(peek)
+	local c = peek(1)
+	local pos
+	if c == "\27" then
+		if peek(2) == "_" then
+			pos = 3
+		else
+			return
+		end
+	elseif c == "\159" then
+		pos = 2
+	else
+		return
+	end
+	return peek_for_st(peek, pos)
+end
+
+local function mouse(peek)
+	local c = peek(1)
+	local pos
+	if c == "\27" then
+		if peek(2) == "[" then
+			pos = 3
+		else
+			return
+		end
+	elseif c == "\155" then
+		pos = 2
+	else
+		return
+	end
+	if peek(pos) == "M" then
+		-- The low two bits of C b encode button information: 0=MB1 pressed, 1=MB2 pressed, 2=MB3 pressed, 3=release.
+		-- The next three bits encode the modifiers which were down when the button was pressed and are added together: 4=Shift, 8=Meta, 16=Control.
+		-- On button-motion events, xterm adds 32 to the event code (the third character, C b )
+		-- Wheel mice may return buttons 4 and 5. Those buttons are represented by the same event codes as buttons 1 and 2 respectively, except that 64 is added to the event code.
+		-- C x and C y are the x and y coordinates of the mouse event, encoded as in X10 mode.
+		return pos + 3
+	end
+end
 
 -- Filter that fixes linux virtual console bugs
-local filter_linux = make_filter(function(getnext, emit)
-	while true do
-		local c = getnext()
-		if c == "\27[" then -- bug in F1-F5 keys
-			c = getnext()
-			if c == "[" then
-				c = getnext()
-				if c == "A" or c == "B" or c == "C" or c == "D" or c == "E" then
-					emit("\27[[" .. c)
-				else
-					emit("\27[")
-					emit("[")
-					emit(c)
-				end
-			else
-				emit("\27[")
-				emit(c)
-			end
-		elseif c == "\27]" then -- bug is an unterminated OSC: P n rr gg bb
-			c = getnext()
-			if c == "P" then
-				local r1 = getnext()
-				local r2 = getnext()
-				local g1 = getnext()
-				local g2 = getnext()
-				local b1 = getnext()
-				local b2 = getnext()
-				emit("\27]P" .. r1 .. r2 .. g1 .. g2 .. b1 .. b2)
-			else
-				emit("\27]")
-				emit(c)
-			end
-		else
-			emit(c)
+local function linux_quirks(peek)
+	-- bug in F1-F5 keys
+	if peek(1) == "\27" and peek(2) == "[" and peek(3) == "[" then
+		local c = peek(4)
+		if c == "A" or c == "B" or c == "C" or c == "D" or c == "E" then
+			return 4
 		end
 	end
-end)
-
-local function default_chain(getnext, ...)
-	-- Always filter ESC first
-	getnext = filter_esc(getnext, ...)
-	-- Should be after ESC but before CSI and OSC
-	getnext = filter_linux(getnext, ...)
-	-- These can be in any order
-	getnext = filter_ss2(getnext, ...)
-	getnext = filter_ss3(getnext, ...)
-	getnext = filter_csi(getnext, ...)
-	getnext = filter_osc(getnext, ...)
-	getnext = filter_dcs(getnext, ...)
-	getnext = filter_sos(getnext, ...)
-	getnext = filter_pm(getnext, ...)
-	getnext = filter_apc(getnext, ...)
-	-- Always after CSI
-	getnext = filter_mouse(getnext, ...)
-	return getnext
+	-- bug is an unterminated OSC: P n rr gg bb
+	if peek(1) == "\27" and peek(2) == "]" and peek(3) == "P" then
+		return 9
+	end
 end
 
+local function make_chain(tbl)
+	return function(peek)
+		for _, v in ipairs(tbl) do
+			local len = v(peek)
+			if len then
+				return len
+			end
+		end
+	end
+end
+
+local default_chain = make_chain {
+	-- Always before CSI
+	mouse;
+	-- These can be in any order
+	SS2;
+	SS3;
+	CSI;
+	OSC;
+	DCS;
+	SOS;
+	PM;
+	APC;
+	-- Should be before ESC but after CSI and OSC
+	linux_quirks;
+	-- Always filter ESC last
+	ESC;
+}
+
 return {
-	make_filter = make_filter;
+	mouse = mouse;
+	SS2 = SS2;
+	SS3 = SS3;
+	CSI = CSI;
+	OSC = OSC;
+	DCS = DCS;
+	SOS = SOS;
+	PM = PM;
+	APC = APC;
+	linux_quirks = linux_quirks;
+	ESC = ESC;
 
-	ESC = filter_esc;
-	linux = filter_linux;
-	SS2 = filter_ss2;
-	SS3 = filter_ss3;
-	CSI = filter_csi;
-	OSC = filter_osc;
-	DCS = filter_dcs;
-	SOS = filter_sos;
-	PM = filter_pm;
-	APC = filter_apc;
-	MOUSE = filter_mouse;
-
+	make_chain = make_chain;
 	default_chain = default_chain;
 }
