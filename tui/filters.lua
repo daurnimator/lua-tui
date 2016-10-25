@@ -177,6 +177,39 @@ local function APC(peek)
 	return peek_for_st(peek, pos)
 end
 
+-- this doesn't block U+D800 through U+DFFF
+local function multibyte_UTF8(peek)
+	local c1 = peek(1)
+	if c1 == nil then return end
+	local b1 = c1:byte()
+	if b1 >= 194 and b1 <= 244 then
+		local c2 = peek(2)
+		if c2 == nil then return end
+		local b2 = c2:byte()
+		if b2 >= 128 and b2 < 192 then
+			if b1 < 224 then
+				return 2
+			else
+				local c3 = peek(3)
+				if c3 == nil then return end
+				local b3 = c3:byte()
+				if b3 >= 128 and b3 < 192 then
+					if b1 < 240 then
+						return 3
+					else
+						local c4 = peek(4)
+						if c4 == nil then return end
+						local b4 = c4:byte()
+						if b4 >= 128 and b4 < 192 then
+							return 4
+						end
+					end
+				end
+			end
+		end
+	end
+end
+
 local function mouse(peek)
 	local c = peek(1)
 	local pos
@@ -246,6 +279,7 @@ local default_chain = make_chain {
 }
 
 return {
+	multibyte_UTF8 = multibyte_UTF8;
 	mouse = mouse;
 	SS2 = SS2;
 	SS3 = SS3;
