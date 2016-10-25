@@ -986,6 +986,10 @@ local short_to_long = {
 	slength = "set_pglen_inch";
 }
 
+local caps_mt = {
+	__name = "tui.terminfo capabilities";
+}
+
 local function read_compiled_terminfo(contents)
 	local magic, name_size, n_booleans, n_numbers, n_offsets, s_string, pos = sunpack("<I2 I2 I2 I2 I2 I2", contents)
 	assert(magic == 282)
@@ -996,7 +1000,7 @@ local function read_compiled_terminfo(contents)
 		end
 		pos = pos + name_size
 	end
-	local caps = {}
+	local caps = setmetatable({}, caps_mt)
 	if n_booleans ~= 65535 then
 		for i=0, n_booleans-1 do
 			if contents:byte(pos+i) ~= 0 then
@@ -1050,7 +1054,7 @@ local escapes = {
 	s = " ";
 }
 local function read_text_terminfo(contents)
-	local caps = {}
+	local caps = setmetatable({}, caps_mt)
 	local names = {}
 
 	-- strip comments
