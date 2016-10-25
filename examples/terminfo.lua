@@ -1,10 +1,10 @@
 local tui_terminfo = require "tui.terminfo"
 
 local caps, names
-if arg[1] then
+if arg[1] and arg[1]:match("/") then
 	caps, names = assert(tui_terminfo.open(arg[1]))
 else
-	caps, names = assert(tui_terminfo.find())
+	caps, names = assert(tui_terminfo.find(arg[1]))
 end
 
 print(names[#names])
