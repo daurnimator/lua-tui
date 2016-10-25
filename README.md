@@ -24,3 +24,8 @@ Parser for terminfo files
 ### tui.tput
 
 `init` and `reset` functions
+
+
+## Useful links
+
+  - http://invisible-island.net/xterm/ctlseqs/ctlseqs.html
