@@ -1123,7 +1123,7 @@ local function open_terminfo(path)
 end
 
 local ENOENT = 2
-local default_system_dir = "/usr/share/terminfo/"
+local default_system_dir = "/usr/share/terminfo"
 
 local function find_terminfo(TERM, dirs)
 	if TERM == nil then
@@ -1132,7 +1132,7 @@ local function find_terminfo(TERM, dirs)
 	if dirs == nil then
 		local TERMINFO = os.getenv "TERMINFO"
 		if TERMINFO then
-			dirs = { TERMINFO:gsub("/?$", "/") }
+			dirs = { TERMINFO:gsub("/?$", "") }
 		else
 			dirs = { }
 			local HOME = os.getenv "HOME"
@@ -1144,6 +1144,8 @@ local function find_terminfo(TERM, dirs)
 				for dir in TERMINFO_DIRS:gmatch("[^:]*") do
 					if dir == "" then
 						dir = default_system_dir
+					else
+						dir = dir:gsub("/?$", "")
 					end
 					table.insert(dirs, dir)
 				end
