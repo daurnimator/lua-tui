@@ -82,7 +82,7 @@ local function OSC(peek)
 	else
 		return
 	end
-	while c do
+	repeat
 		c = peek(pos)
 		if c == "\27" then
 			if peek(pos+1) == "\\" then
@@ -90,11 +90,9 @@ local function OSC(peek)
 			end
 		elseif c == "\156" or c == "\7" then -- OSC can be terminated by BEL in xterm
 			return pos
-		else
-			return
 		end
 		pos = pos + 1
-	end
+	until not c
 end
 
 local function peek_for_st(peek, pos)
