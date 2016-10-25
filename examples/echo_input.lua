@@ -1,20 +1,7 @@
 local tui = require "tui"
+local tui_util = require "tui.util"
 
-local atexit
-if _VERSION == "Lua 5.1" then
-	-- luacheck: std lua51
-	function atexit(func)
-		local proxy = newproxy(true)
-		debug.setmetatable(proxy, {__gc = function() return func() end})
-		table.insert(debug.getregistry(), proxy)
-	end
-else
-	function atexit(func)
-		table.insert(debug.getregistry(), setmetatable({}, {__gc = function() return func() end}))
-	end
-end
-
-atexit(function()
+tui_util.atexit(function()
 	-- Turn all mouse reporting off
 	io.stdout:write("\27[?1003l")
 	os.execute("stty sane")
