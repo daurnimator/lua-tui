@@ -1,19 +1,7 @@
 local tui_terminfo = require "tui.terminfo"
+local tui_util = require "tui.util"
 
 local default_terminfo = tui_terminfo.find()
-
-local function read_file(path)
-	local fd, err, errno = io.open(fd, "rb")
-	if not fd then
-		return nil, err, errno
-	end
-	local contents, err2, errno2 = fd:read("*a")
-	fd:close()
-	if not contents then
-		return nil, err2, errno2
-	end
-	return contents
-end
 
 local function init(fd, terminfo)
 	if fd == nil then
@@ -36,7 +24,7 @@ local function init(fd, terminfo)
 	}
 	local file = terminfo.init_file
 	if file then
-		str[9] = read_file(file) or ""
+		str[9] = tui_util.read_file(file) or ""
 	end
 	return fd:write(table.concat(str))
 end
@@ -62,7 +50,7 @@ local function reset(fd, terminfo)
 	}
 	local file = terminfo.reset_file or terminfo.init_file
 	if file then
-		str[9] = read_file(file) or ""
+		str[9] = tui_util.read_file(file) or ""
 	end
 	return fd:write(table.concat(str))
 end
