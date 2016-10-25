@@ -1,14 +1,3 @@
-local function ESC(peek)
-	if peek(1) == "\27" then
-		if peek(2) == "\27" then
-			-- If multiple ESC in a row just emit them
-			return 1
-		else
-			return 2
-		end
-	end
-end
-
 local function SS2(peek)
 	local c = peek(1)
 	if c == "\27" then
@@ -274,8 +263,6 @@ local default_chain = make_chain {
 	APC;
 	-- Should be before ESC but after CSI and OSC
 	linux_quirks;
-	-- Always filter ESC last
-	ESC;
 }
 
 return {
@@ -290,7 +277,6 @@ return {
 	PM = PM;
 	APC = APC;
 	linux_quirks = linux_quirks;
-	ESC = ESC;
 
 	make_chain = make_chain;
 	default_chain = default_chain;

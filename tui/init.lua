@@ -30,7 +30,15 @@ local function fd_to_getter(fd, filter)
 		return r
 	end
 	return function()
-		return take(filter(peek) or 1)
+		local a, err, errno = take(filter(peek) or 1)
+		if a and a == "\27" then
+			-- if result is a 'loose' escape, then tie it to the next sequence
+			local b = take(filter(peek) or 1)
+			if b then
+				return a .. b
+			end
+		end
+		return a, err, errno
 	end
 end
 
