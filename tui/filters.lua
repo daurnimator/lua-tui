@@ -88,7 +88,7 @@ local function OSC(peek)
 			if peek(pos+1) == "\\" then
 				return pos+1
 			end
-		elseif c == "\156" or c == "\9" then -- OSC can be terminated by BEL in xterm
+		elseif c == "\156" or c == "\7" then -- OSC can be terminated by BEL in xterm
 			return pos
 		else
 			return
