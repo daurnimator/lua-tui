@@ -201,6 +201,7 @@ local function tparm(str, ...)
 				if params[2] == 0 then
 					params[2] = 1
 				end
+				pos = s + 1
 			elseif c == "?" then
 				pos = s + 1
 			elseif c == "t" then
@@ -263,6 +264,8 @@ local function tparm(str, ...)
 					res_n = res_n + 1
 					res[res_n] = string.format("%"..what, v)
 					pos = e
+				else
+					pos = s + 1
 				end
 			end
 		end
