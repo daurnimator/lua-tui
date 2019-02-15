@@ -1158,6 +1158,14 @@ local function find_terminfo(TERM, dirs)
 	for _, dir in ipairs(dirs) do
 		local path = string.format("%s/%s/%s", dir, TERM:sub(1, 1), TERM)
 		caps, names, errno = open_terminfo(path)
+
+		-- On some system, the subdirectory is the first char's byte
+		-- See: https://invisible-island.net/ncurses/NEWS.html#t20071117
+		if caps == nil or errno == ENOENT then
+			path = string.format("%s/%02x/%s", dir, TERM:byte(1), TERM)
+			caps, names, errno = open_terminfo(path)
+		end
+
 		if caps ~= nil or errno ~= ENOENT then
 			break
 		end
